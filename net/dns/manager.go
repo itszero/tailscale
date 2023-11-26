@@ -91,10 +91,6 @@ func (m *Manager) Set(cfg Config) error {
 	}))
 
 	rcfg, ocfg, err := m.compileConfig(cfg)
-	if err != nil {
-		m.logf("err: %s", err)
-		return err
-	}
 
 	m.logf("Resolvercfg: %v", logger.ArgWriter(func(w *bufio.Writer) {
 		rcfg.WriteToBufioWriter(w)
@@ -106,6 +102,12 @@ func (m *Manager) Set(cfg Config) error {
 	if err := m.resolver.SetConfig(rcfg); err != nil {
 		return err
 	}
+
+	if err != nil {
+		m.logf("err: %s", err)
+		return err
+	}
+
 	if err := m.os.SetDNS(ocfg); err != nil {
 		health.SetDNSOSHealth(err)
 		return err
@@ -276,7 +278,7 @@ func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig
 		} else {
 			m.logf("compileConfig: 13")
 			health.SetDNSOSHealth(err)
-			return resolver.Config{}, OSConfig{}, err
+			return rcfg, OSConfig{}, err
 		}
 	}
 
