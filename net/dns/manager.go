@@ -92,6 +92,7 @@ func (m *Manager) Set(cfg Config) error {
 
 	rcfg, ocfg, err := m.compileConfig(cfg)
 	if err != nil {
+		m.logf("err: %s", err)
 		return err
 	}
 
@@ -159,6 +160,8 @@ func compileHostEntries(cfg Config) (hosts []*HostEntry) {
 // compileConfig converts cfg into a quad-100 resolver configuration
 // and an OS-level configuration.
 func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig, err error) {
+	m.logf("compileConfig: 1")
+
 	// The internal resolver always gets MagicDNS hosts and
 	// authoritative suffixes, even if we don't propagate MagicDNS to
 	// the OS.
@@ -172,18 +175,21 @@ func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig
 		}
 	}
 
+	m.logf("compileConfig: 2")
 	// Similarly, the OS always gets search paths.
 	ocfg.SearchDomains = cfg.SearchDomains
 	if runtime.GOOS == "windows" {
 		ocfg.Hosts = compileHostEntries(cfg)
 	}
 
+	m.logf("compileConfig: 3")
 	// Deal with trivial configs first.
 	switch {
 	case !cfg.needsOSResolver():
 		// Set search domains, but nothing else. This also covers the
 		// case where cfg is entirely zero, in which case these
 		// configs clear all Tailscale DNS settings.
+		m.logf("compileConfig: 4")
 		return rcfg, ocfg, nil
 	case cfg.hasDefaultIPResolversOnly() && !cfg.hasHostsWithoutSplitDNSRoutes():
 		// Trivial CorpDNS configuration, just override the OS resolver.
@@ -196,9 +202,11 @@ func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig
 		// TODO: for OSes that support it, pass IP:port and DoH
 		// addresses directly to OS.
 		// https://github.com/tailscale/tailscale/issues/1666
+		m.logf("compileConfig: 5")
 		ocfg.Nameservers = toIPsOnly(cfg.DefaultResolvers)
 		return rcfg, ocfg, nil
 	case cfg.hasDefaultResolvers():
+		m.logf("compileConfig: 6")
 		// Default resolvers plus other stuff always ends up proxying
 		// through quad-100.
 		rcfg.Routes = routes
@@ -227,8 +235,10 @@ func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig
 	//
 	// This bool is used in a couple of places below to implement this
 	// workaround.
+	m.logf("compileConfig: 7")
 	isWindows := runtime.GOOS == "windows"
 	if len(cfg.singleResolverSet()) > 0 && m.os.SupportsSplitDNS() && !isWindows {
+		m.logf("compileConfig: 8")
 		// Split DNS configuration requested, where all split domains
 		// go to the same resolvers. We can let the OS do it.
 		ocfg.Nameservers = toIPsOnly(cfg.singleResolverSet())
@@ -236,6 +246,7 @@ func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig
 		return rcfg, ocfg, nil
 	}
 
+	m.logf("compileConfig: 9")
 	// Split DNS configuration with either multiple upstream routes,
 	// or routes + MagicDNS, or just MagicDNS, or on an OS that cannot
 	// split-DNS. Install a split config pointing at quad-100.
@@ -250,26 +261,32 @@ func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig
 	// that as the forwarder for all DNS traffic that quad-100 doesn't handle.
 	const isApple = runtime.GOOS == "darwin" || runtime.GOOS == "ios"
 
+	m.logf("compileConfig: 10")
 	if isApple || !m.os.SupportsSplitDNS() {
 		// If the OS can't do native split-dns, read out the underlying
 		// resolver config and blend it into our config.
 		cfg, err := m.os.GetBaseConfig()
 		if err == nil {
+			m.logf("compileConfig: 11")
 			baseCfg = &cfg
 		} else if isApple && err == ErrGetBaseConfigNotSupported {
+			m.logf("compileConfig: 12")
 			// This is currently (2022-10-13) expected on certain iOS and macOS
 			// builds.
 		} else {
+			m.logf("compileConfig: 13")
 			health.SetDNSOSHealth(err)
 			return resolver.Config{}, OSConfig{}, err
 		}
 	}
 
 	if baseCfg == nil || isApple && len(baseCfg.Nameservers) == 0 {
+		m.logf("compileConfig: 14")
 		// If there was no base config, or if we're on Apple and the base
 		// config is empty, then we need to fallback to SplitDNS mode.
 		ocfg.MatchDomains = cfg.matchDomains()
 	} else {
+		m.logf("compileConfig: 15")
 		var defaultRoutes []*dnstype.Resolver
 		for _, ip := range baseCfg.Nameservers {
 			defaultRoutes = append(defaultRoutes, &dnstype.Resolver{Addr: ip.String()})
@@ -278,6 +295,7 @@ func (m *Manager) compileConfig(cfg Config) (rcfg resolver.Config, ocfg OSConfig
 		ocfg.SearchDomains = append(ocfg.SearchDomains, baseCfg.SearchDomains...)
 	}
 
+	m.logf("compileConfig: 16")
 	return rcfg, ocfg, nil
 }
 
