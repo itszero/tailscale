@@ -703,7 +703,7 @@ func (f *forwarder) sendTCP(ctx context.Context, fq *forwardQuery, rr resolverAn
 
 	// Keeping this as SystemDial per discussion in https://github.com/tailscale/tailscale/pull/10380
 	// This would mean SplitDNS via upstreams only reachable via UserDial would not work currently.
-	conn, err := f.dialer.SystemDial(ctx, tcpFam, ipp.String())
+	conn, err := f.dialer.UserDial(ctx, tcpFam, ipp.String())
 	if err != nil {
 		return nil, err
 	}
